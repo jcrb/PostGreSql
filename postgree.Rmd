@@ -1,0 +1,202 @@
+---
+title: "PostgreeSql"
+author: "Jcb"
+date: "13/07/2014"
+output: html_document
+---
+
+Installation
+------------
+
+ref: [Ubuntu](http://doc.ubuntu-fr.org/postgresql) 
+
+[Doc PGSql en français](http://docs.postgresql.fr/)
+
+Installation du serveur PostgreSQL: via synaptic
+
+Notez que l'installation ajoute l'utilisateur postgres à la liste des utilisateurs. Utilisez finger si vous souhaitez de plus amples informations sur ce nouvel utilisateur (finger est un utilitaire permettant de consulter les informations relatives aux utilisateurs système, il n'est pas installé par défaut dans ubuntu) 
+
+L'utilisateur postgres
+----------------------
+PostgreSQL est un serveur qui permet de se connecter à différentes bases de données. Par défaut, seul l'utilisateur postgres peut se connecter.
+
+Toutes les opérations d'administration se font, au départ, avec l'utilisateur postgres. À la fin de l'installation, celui-ci ne possède pas de mot de passe : c'est un utilisateur bloqué et le mieux est qu'il le reste. La première chose à faire sera de créer un nouvel utilisateur, mais pour ce faire, il faut se connecter au moins une fois en tant qu'utilisateur postgres. Pour devenir postgres et faire les opérations d'administration qui suivent, utilisez sudo 
+
+```{}
+jcb@cartudo:~$ sudo -i -u postgres 
+```
+__exit__ permettra, à la fin de cette session d'administration dans PostgreSQL, de reprendre la main en tant qu'utilisateur du système.
+
+Désormais, l'invite de commande doit mentionner que vous êtes actif en tant que postgres. Pour lancer l'outil d'administration de PostgreSQL, tapez simplement : 
+```{}
+postgres@cartudo:~$ psql
+psql (9.1.13)
+Type "help" for help.
+```
+ Notez que vous avez une interface en ligne de commande, et que vous êtes connecté en tant que "root", comme l'indique le # en bout de ligne.
+
+Cette ligne de commande sera bien sûr utilisée pour exécuter des requêtes SQL, et aussi des commandes internes à postgreSQL (elles commencent toutes par un antislash)
+
+Petit guide de survie pour le client psql
+
+        \h pour l'aide-mémoire des commandes SQL
+        \? pour l'aide-mémoire des commandes psql
+        \g ou point-virgule en fin d'instruction pour exécuter la requête
+        \q pour quitter
+
+Créer un utilisateur PostgreSQL
+-------------------------------
+Méthode rapide, non sécurisée (-> privilégier la méthode décrite dans le chapitre suivant)
+
+postgres est à psql ce que root est à Ubuntu. Il ne faut l'utiliser que pour les tâches d'administration, en aucun cas s'en servir pour un applicatif, sinon vous allez créer une faille de sécurité.
+
+Par facilité, nous allons assimiler les utilisateurs du système à ceux qui se connecteront avec psql, mais ce n'est nullement obligatoire. Par la suite, nous supposerons que votre login système est nom_utilisateur.
+
+Commencez par créer un nouvel utilisateur, qui portera par exemple le même nom que vous. Dans la ligne de commande ci-dessous, tapez (rappel : la partie « postgres=# » est l'invite de commande, il ne faut pas la retaper ! Ainsi, la commande ci-dessous requiert de taper « CREATE USER <nom_utilisateur>; », en remplaçant <nom_utilisateur> par un identifiant bien choisi) : 
+```{}
+postgres=# create user jcb;
+CREATE ROLE
+```
+ N'oubliez pas le point-virgule à la fin…
+
+Par défaut, votre nouvel utilisateur n'a aucun droit. Donnez-lui la possibilité de créer de nouvelles bases de données :
+```{}
+postgres=# alter role jcb with createdb;
+ALTER ROLE
+```
+Ensuite, créez une base de données pour votre utilisateur. Par exemple, vous pouvez prendre comme nom : nom_utilisateur. Ainsi, la connexion sera automatique. 
+```{}
+postgres=# create database jcb owner jcb
+```
+Attribuer un mot de passe à l'utilisateur pour qu'il puisse se connecter à la base (le ENCRYPTED permet l'utilisation de md5 dans le pg_hba.conf) : 
+```{}
+postgres=# alter user jcb with encrypted password 'marion';
+ALTER ROLE
+```
+Vous pouvez maintenant quitter, "redevenir vous-même" et relancer psql directement, en étant cette fois connecté sous votre propre nom : 
+```{}
+postgres=# \q
+postgres@cartudo:~$ exit
+déconnexion
+jcb@cartudo:~$ psql jcb
+psql (9.1.13)
+Type "help" for help.
+```
+ La ligne de commande est devenue :
+```{}
+jcb=> 
+```
+Méthode alternative pour créer un utilisateur
+---------------------------------------------
+Vous pouvez aussi créer vos utilisateurs directement en ligne de commande, depuis le terminal standard, mais en étant connecté en tant que postgres, bien sûr.
+
+Cette méthode est beaucoup plus sûre que la précédente. Tous les utilisateurs auront des mots de passe chiffrés. (Ce qui n'est pas le cas lorsque l'on emploie la méthode précédente)
+
+Il faut d'abord modifier le fichier de configuration pour autoriser les connexions via mot de passe chiffré : 
+```{}
+ sudo gedit /etc/postgresql/9.1/main/pg_hba.conf 
+```
+Modifier le fichier en remplaçant ident sameuser par md5 afin d'obtenir les lignes suivantes :
+
+...
+# Database administrative login by Unix domain socket
+local   all             postgres                                peer
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# "local" is for Unix domain socket connections only
+local   all             all                                     md5
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            md5
+# IPv6 local connections:
+host    all             all             ::1/128                 md5
+...
+
+La modification des paramètres de connexion au serveur nécessite son redémarrage pour que ces derniers soient pris en compte. 
+```{}
+jcb@cartudo:~$ sudo /etc/init.d/postgresql restart
+ * Restarting PostgreSQL 9.1 database server                             [ OK ] 
+```
+On peut ensuite créer notre utilisateur : 
+```{}
+jcb@cartudo:~$ sudo -i -u postgres
+postgres@cartudo:~$ createuser -P jcb2
+Enter password for new role: [marion]
+Enter it again:  [marion]
+Shall the new role be a superuser? (y/n) n
+Shall the new role be allowed to create databases? (y/n) y
+Shall the new role be allowed to create more new roles? (y/n) y
+```
+ Puis, on lui crée une base de données dédiée :
+```{}
+postgres@cartudo:~$ createdb -O jcb2 -E UTF8 test_jcb
+
+```
+Ensuite, on peut se connecter via :
+
+$ psql -U <nom_utilisateur>
+Mot de passe pour l'utilisateur <nom_utilisateur> : 
+
+ou, si le nom de la base de l'utilisateur n'est pas le même que celui de l'utilisateur :
+
+$ psql -U <nom_utilisateur> <nom_database_de_l_utilisateur>
+Mot de passe pour l'utilisateur <nom_utilisateur> : 
+```{}
+postgres@cartudo:~$ psql -U jcb2 test_jcb
+Password for user jcb2: 
+psql (9.1.13)
+Type "help" for help.
+
+test_jcb=> 
+
+```
+
+Donner à une base la capacité géographique
+------------------------------------------
+
+Tout d'abord, créer la base de données en question 
+```{}
+createdb -U jcb2 test_geom
+```
+Puis on utilser le rôle postgres (super user postgresql) 
+```{}
+$ sudo -i -u postgres 
+```
+et exécuter:
+```{}
+psql -f /usr/share/postgresql/9.1/contrib/postgis-1.5/spatial_ref_1.5.sql test_geom
+psql -f /usr/share/postgresql/9.1/contrib/postgis-1.5/spatial_ref_sys.sql test_geom
+exit
+```
+ Pour faire des imports et des exports (car la fonction sur phppgadmin est bancale) :
+
+$ sudo -i -u postgres
+
+export :
+
+pg_dump <nom_de_la_base> > nom_de_la_base.pgdump
+
+import:
+
+cat  nom_de_la_base.pgdump | psql -d  nom_de_la_base
+
+Clients graphiques
+-------------------
+Le client pgadmin3
+
+PgAdmin III est un outil graphique d'administration de votre serveur PostgreSQL. L'application pgAdmin III peut être utilisé pour administrer les serveurs PostgreSQL 7.3 et les versions supérieures. PgAdmin III existe pour toutes les plateformes dont, évidemment, Ubuntu, KUbuntu, XUbuntu.
+
+PgAdmin III a été conçu pour répondre aux besoins de tous les utilisateurs, depuis la rédaction de simple requêtes SQL au développement complexe de base de données. L'interface graphique supporte toutes les fonctionnalités de PostGreSQL et permet une administration simple. L'application inclut aussi un éditeur de requête avec coloration syntaxique, un éditeur de code, un agent de gestion de tâche automatique, un support pour les réplication via Slony-I et bien d'autres fonctionnalités.
+Installation du client pgadmin3
+
+On commence par installer les paquets nécessaires : pgadmin3
+
+sudo apt-get install pgadmin3
+
+Cela va également installer les paquets suivants :
+
+    libpq4
+    libwxbase2.6-0
+    libwxgtk2.6-0
+    pgadmin3-data
+
